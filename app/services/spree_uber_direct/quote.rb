@@ -67,44 +67,12 @@ module SpreeUberDirect
 
     def build_payload(order, stock_location)
       {
-        pickup_address: format_address(stock_location).to_json,
-        pickup_phone_number: format_phone(stock_location.phone),
-        dropoff_address: format_address(order.ship_address).to_json,
-        dropoff_phone_number: format_phone(order.ship_address.phone),
+        pickup_address: AddressPayload.format_address(stock_location),
+        pickup_phone_number: AddressPayload.format_phone(stock_location.phone),
+        dropoff_address: AddressPayload.format_address(order.ship_address),
+        dropoff_phone_number: AddressPayload.format_phone(order.ship_address.phone),
         manifest_total_value: (order.total * 100).to_i
       }
-    end
-
-    # Same E.164 normalization as SpreeDoordash::Quote#format_phone (Uber's
-    # own schema pattern, `^\+[0-9]+$`, is the same shape DoorDash rejects
-    # anything else against) — US-only, matching the rest of this demo.
-    def format_phone(raw)
-      digits = raw.to_s.gsub(/\D/, '')
-      digits = "1#{digits}" if digits.length == 10
-      "+#{digits}"
-    end
-
-    # Uber wants a JSON *string* per address field (confirmed directly
-    # against the real openapi.yaml shipped in uber/uber-direct-sdk, not
-    # guessed) — structured, not DoorDash's flat comma-joined string.
-    # street_address is itself an array (Uber's schema allows a second
-    # line — apartment/suite — as a second array element; not used here
-    # since neither Spree::StockLocation nor Spree::Address models that as
-    # a separate field the way address2 does... see note below).
-    #
-    # Spree::StockLocation and Spree::Address share the same field shape
-    # (address1/address2/city/state/zipcode/country) even though they're
-    # unrelated classes, same observation SpreeDoordash::Quote's own
-    # format_address docstring makes.
-    def format_address(record)
-      street = [record.address1, record.try(:address2)].compact_blank
-      {
-        street_address: street,
-        city: record.city,
-        state: record.state&.abbr || record.state_name,
-        zip_code: record.zipcode,
-        country: record.country&.iso
-      }.compact
     end
 
     def persist_quote!(order, response)

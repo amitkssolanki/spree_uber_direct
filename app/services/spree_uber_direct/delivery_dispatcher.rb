@@ -6,6 +6,15 @@ module SpreeUberDirect
   # the identical reason — checkout can easily outlast a quote's validity
   # window (Uber returns its own real `expires` per quote; see
   # SpreeUberDirect::QuoteMapping#expired?).
+  #
+  # Architecturally bigger than DoorDash's own accept_quote (which only
+  # needs the external_delivery_id, DoorDash already has everything else
+  # from the original quote request) — confirmed live against a real
+  # Sandbox 400: Uber's POST /deliveries wants a *full* DeliveryReq body
+  # (pickup/dropoff name+address+phone, manifest_items,
+  # manifest_total_value) even when a quote_id is also provided. Reuses
+  # AddressPayload (shared with Quote) rather than duplicating the
+  # formatting logic.
   class DeliveryDispatcher
     def self.call(...) = new.call(...)
 
@@ -13,8 +22,11 @@ module SpreeUberDirect
       quote_mapping = quote_mapping_for(order)
       return nil unless quote_mapping
 
+      stock_location = pickup_location_for(order)
+      return nil unless stock_location
+
       client = SpreeUberDirect::Client.for_store(order.store || Spree::Store.default)
-      response = client.create_delivery(quote_id: quote_mapping.external_quote_id)
+      response = client.create_delivery(build_payload(order, stock_location, quote_mapping))
 
       persist_delivery!(order, response)
     rescue SpreeUberDirect::Client::MissingCredentialsError, SpreeUberDirect::RequestError => e
@@ -32,6 +44,34 @@ module SpreeUberDirect
 
       SpreeUberDirect::Quote.call(order)
       SpreeUberDirect::QuoteMapping.find_by(order: order)
+    end
+
+    # Same lookup as SpreeUberDirect::Quote#pickup_location_for — queried
+    # directly rather than trusting an already-loaded `order.shipments`
+    # association, same reasoning.
+    def pickup_location_for(order)
+      Spree::Shipment.where(order_id: order.id).first&.stock_location ||
+        Spree::StockLocation.find_by(default: true)
+    end
+
+    def build_payload(order, stock_location, quote_mapping)
+      {
+        quote_id: quote_mapping.external_quote_id,
+        pickup_name: stock_location.name,
+        pickup_address: AddressPayload.format_address(stock_location),
+        pickup_phone_number: AddressPayload.format_phone(stock_location.phone),
+        dropoff_name: order.ship_address.full_name,
+        dropoff_address: AddressPayload.format_address(order.ship_address),
+        dropoff_phone_number: AddressPayload.format_phone(order.ship_address.phone),
+        manifest_items: manifest_items(order),
+        manifest_total_value: (order.total * 100).to_i
+      }
+    end
+
+    def manifest_items(order)
+      order.line_items.map do |item|
+        { name: item.name, quantity: item.quantity }
+      end
     end
 
     def persist_delivery!(order, response)
