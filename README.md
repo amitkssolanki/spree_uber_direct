@@ -8,6 +8,16 @@ A second, independent delivery provider alongside [`spree_doordash`](https://git
 — both extensions add their own `Spree::ShippingMethod`, so a store can offer either, both, or
 neither, with zero coupling between them.
 
+## Status
+
+M1–M5 built and verified against a real Uber Direct Sandbox account end to end — real OAuth token,
+real quotes, a real dispatched delivery driven through Uber's "Robo Courier" test simulator from
+`pending` through `delivered`, both admin pages confirmed loading against real Postgres data. See
+[CHANGELOG.md](CHANGELOG.md) for the full milestone-by-milestone verification detail, including what
+was *not* live-tested (inbound webhook receiving — no public tunnel was set up). M6 (final spec
+polish/docs) and M7 (production go-live, gated on Uber's own approval) haven't started. Not yet
+tagged, pushed to a remote, or released.
+
 ## Installation
 
 Add to your Gemfile:
