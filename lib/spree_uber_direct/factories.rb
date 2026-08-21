@@ -20,4 +20,18 @@ FactoryBot.define do
     currency { 'USD' }
     quote_expires_at { 15.minutes.from_now }
   end
+
+  factory :uber_direct_delivery_mapping, class: 'SpreeUberDirect::DeliveryMapping' do
+    order
+    sequence(:external_delivery_id) { |i| "del_#{i}" }
+    last_status { 'pending' }
+    tracking_url { 'https://www.ubereats.com/orders/abc123' }
+  end
+
+  factory :uber_direct_webhook_event, class: 'SpreeUberDirect::WebhookEvent' do
+    sequence(:delivery_id) { |i| "del_#{i}" }
+    status { 'pickup' }
+    sequence(:payload_digest) { |i| "digest-#{i}" }
+    payload { { 'delivery_id' => 'del_1', 'status' => 'pickup' } }
+  end
 end
