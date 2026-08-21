@@ -12,4 +12,12 @@ FactoryBot.define do
     uber_environment { 'sandbox' }
     webhook_signing_secret { 'test-webhook-signing-secret' }
   end
+
+  factory :uber_direct_quote_mapping, class: 'SpreeUberDirect::QuoteMapping' do
+    order
+    sequence(:external_quote_id) { |i| "dqt_#{i}" }
+    quoted_fee_cents { 599 }
+    currency { 'USD' }
+    quote_expires_at { 15.minutes.from_now }
+  end
 end
