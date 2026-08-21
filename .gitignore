@@ -1,0 +1,27 @@
+\#*
+*~
+.#*
+.DS_Store
+.idea
+.localeapp/locales
+.project
+.vscode
+coverage
+default
+Gemfile.lock
+tmp
+nbproject
+pkg
+*.sw?
+spec/dummy
+.rvmrc
+.sass-cache
+public/spree
+.ruby-version
+.ruby-gemset
+*.gem
+*/*.gem
+
+# Real Uber Direct Sandbox credentials for manual verification — never committed,
+# unlike the test-only encryption keys in .env.
+.env.sandbox
