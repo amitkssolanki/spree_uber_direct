@@ -40,7 +40,10 @@ module SpreeUberDirect
       # validation and surface as a 404 to Uber's webhook delivery system
       # — a courier-location ping and a refund notification both need no
       # processing from this extension today.
-      return head :ok if payload['status'].blank?
+      if payload['status'].blank?
+        Rails.logger.debug { "[SpreeUberDirect] dropping webhook with no status (kind=#{payload['kind']}, id=#{payload['id']})" }
+        return head :ok
+      end
 
       event = find_or_log_event(raw_body, payload)
       SpreeUberDirect::DeliveryWebhookJob.perform_later(event.id) if event.previously_new_record?
