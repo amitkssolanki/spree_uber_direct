@@ -26,6 +26,22 @@ module SpreeUberDirect
       end
 
       payload = JSON.parse(raw_body)
+
+      # Uber's dashboard lets a webhook subscribe to three event kinds on
+      # this one endpoint: `event.delivery_status` (the only one with a
+      # `status` field — confirmed live), `event.courier_update` (a
+      # courier GPS ping fired every 20s once a courier is assigned — no
+      # `status` field, confirmed live), and `event.refund_request` (fired
+      # when a refund is requested — no `status` field either, confirmed
+      # directly against Uber's own webhook payload docs). WebhookEvent's
+      # `status` column is specifically Uber's *delivery* status (see its
+      # own model comment) and requires presence, so acknowledge and drop
+      # anything that doesn't carry one rather than letting it fail
+      # validation and surface as a 404 to Uber's webhook delivery system
+      # — a courier-location ping and a refund notification both need no
+      # processing from this extension today.
+      return head :ok if payload['status'].blank?
+
       event = find_or_log_event(raw_body, payload)
       SpreeUberDirect::DeliveryWebhookJob.perform_later(event.id) if event.previously_new_record?
 
