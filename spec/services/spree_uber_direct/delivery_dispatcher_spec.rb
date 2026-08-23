@@ -116,15 +116,16 @@ RSpec.describe SpreeUberDirect::DeliveryDispatcher do
       expect(create_stub).to have_been_requested
     end
 
-    it 'never requests Robo Courier when running in a real production Rails environment, even with a sandbox credential' do
-      # This project's own live storefront runs production Rails against a
-      # genuinely `uber_environment: sandbox` credential (no Uber production
-      # API access yet) — the credential alone can't be trusted as "this is
-      # just a test", so Robo Courier must also check Rails.env.
+    it 'requests Robo Courier even in a real production Rails environment, as long as the credential is sandbox' do
+      # Deliberate: this project's storefront is a demo running end to end
+      # on sandbox credentials (Square, DoorDash, Uber alike) regardless of
+      # Rails.env — showing the full Uber Direct delivery lifecycle live to
+      # a real visitor is the intended demo experience, not something to
+      # guard against. Gating is on the credential's own sandbox flag only.
       allow(Rails.env).to receive(:production?).and_return(true)
       create(:uber_direct_quote_mapping, order: order, external_quote_id: 'dqt_existing', quote_expires_at: 10.minutes.from_now)
       create_stub = stub_request(:post, "https://api.uber.com/v1/customers/#{credential.customer_id}/deliveries")
-        .with { |req| !JSON.parse(req.body).key?('test_specifications') }
+        .with(body: hash_including('quote_id' => 'dqt_existing', 'test_specifications' => { 'robo_courier_specification' => { 'mode' => 'auto' } }))
         .to_return(status: 200, body: { id: 'del_abc', status: 'pending', tracking_url: nil, courier: nil }.to_json,
                    headers: { 'Content-Type' => 'application/json' })
 

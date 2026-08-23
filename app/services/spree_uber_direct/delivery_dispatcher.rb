@@ -54,18 +54,22 @@ module SpreeUberDirect
         Spree::StockLocation.find_by(default: true)
     end
 
-    # Deliberately two independent gates, not just "the credential says
-    # sandbox": this project's own production deploy currently runs its
-    # real, live storefront against a genuinely `uber_environment: sandbox`
-    # credential too (Uber has not yet granted production API access — see
-    # the gem's own CHANGELOG). If Robo Courier were gated on the credential
-    # alone, deploying this to production would silently auto-advance every
-    # real customer's delivery through fake status transitions on a 30s
-    # timer. `Rails.env.production?` is the actual "is this a real deployed
-    # instance serving real customers" signal, independent of which
-    # provider environment its credentials happen to be configured for.
+    # Gated on the credential's own sandbox flag only — deliberately, not
+    # also on Rails.env. An earlier version of this method also required
+    # !Rails.env.production?, reasoning that this project's live storefront
+    # runs real production Rails against a genuinely `uber_environment:
+    # sandbox` credential (Uber has not yet granted production API access),
+    # so the credential alone couldn't be trusted as "this is just a test".
+    # That's still true, but it was the wrong tradeoff for this specific
+    # project: the whole storefront is a demo running entirely on sandbox
+    # credentials end to end (Square, DoorDash, Uber alike) — showing a
+    # real visitor the full Uber Direct delivery lifecycle live is the
+    # intended demo experience here, not an accident to guard against.
+    # Explicit, informed decision, not a default: confirm this project's
+    # storefront is still demo-only before ever reusing this pattern
+    # somewhere real money/production access is actually on the line.
     def robo_courier?(client)
-      client.sandbox? && !Rails.env.production?
+      client.sandbox?
     end
 
     def build_payload(order, stock_location, quote_mapping, robo_courier:)
