@@ -41,7 +41,7 @@ module SpreeUberDirect
       # own RefundEvent table before falling into the generic
       # blank-status drop below.
       if payload['kind'] == 'event.refund_request'
-        SpreeUberDirect::RefundEvent.create!(delivery_id: payload['delivery_id'], payload: payload)
+        find_or_log_refund_event(raw_body, payload)
         return head :ok
       end
 
@@ -82,6 +82,31 @@ module SpreeUberDirect
         status: payload['status'],
         payload_digest: SpreeUberDirect::WebhookEvent.digest(raw_body)
       )
+    end
+
+    def find_or_log_refund_event(raw_body, payload)
+      digest = SpreeUberDirect::RefundEvent.digest(raw_body)
+
+      SpreeUberDirect::RefundEvent.find_or_create_by!(
+        delivery_id: payload['delivery_id'],
+        payload_digest: digest
+      ) do |event|
+        event.payload = payload
+      end
+    rescue ActiveRecord::RecordNotUnique
+      # Lost a race with a concurrent duplicate delivery — the row exists
+      # now either way.
+      SpreeUberDirect::RefundEvent.find_by(delivery_id: payload['delivery_id'], payload_digest: digest)
+    rescue ActiveRecord::RecordInvalid => e
+      # A payload we genuinely can't persist (e.g. no delivery_id at all)
+      # — log loudly so the drop stays traceable, but still ack. A
+      # refund notification that can't even be stored shouldn't turn
+      # into a 4xx/5xx retry storm against Uber's webhook delivery
+      # system; Uber would just keep resending the identical payload.
+      Rails.logger.error(
+        "[SpreeUberDirect] failed to persist refund_request webhook: #{e.message} (id=#{payload['id']})"
+      )
+      nil
     end
   end
 end

@@ -14,6 +14,12 @@ class CreateSpreeUberDirectRefundEvents < ActiveRecord::Migration[8.1]
       # actually needs it.
       t.string :delivery_id, null: false
 
+      # Same idempotency-key shape as WebhookEvent (delivery_id + a digest
+      # of the raw body) — Uber's webhook delivery is at-least-once, and
+      # without this a retried refund_request would insert a second row
+      # for the identical refund.
+      t.string :payload_digest, null: false
+
       # jsonb on Postgres, json on SQLite — same rationale as every
       # sibling migration in this project (see WebhookEvent's own
       # migration comment for the Postgres-only `SELECT DISTINCT` bug this
@@ -27,6 +33,7 @@ class CreateSpreeUberDirectRefundEvents < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :spree_uber_direct_refund_events, :delivery_id
+    add_index :spree_uber_direct_refund_events, %i[delivery_id payload_digest],
+              unique: true, name: 'index_spree_uber_direct_refund_events_on_idempotency_key'
   end
 end

@@ -13,6 +13,11 @@ module SpreeUberDirect
   # for this data yet. It exists purely so refund reconciliation admin UI
   # or accounting sync has something real to read from whenever it's
   # built.
+  #
+  # Does keep WebhookEvent's idempotency-key shape though (delivery_id +
+  # a digest of the raw body) — Uber's webhook delivery is at-least-once,
+  # and a retried refund_request shouldn't silently become two rows for
+  # the same refund.
   class RefundEvent < Spree.base_class
     self.table_name = 'spree_uber_direct_refund_events'
 
@@ -20,5 +25,10 @@ module SpreeUberDirect
 
     validates :delivery_id, presence: true
     validates :payload, presence: true
+    validates :payload_digest, presence: true, uniqueness: { scope: :delivery_id }
+
+    def self.digest(raw_body)
+      Digest::SHA256.hexdigest(raw_body)
+    end
   end
 end

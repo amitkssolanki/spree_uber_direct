@@ -122,4 +122,34 @@ RSpec.describe 'SpreeUberDirect webhooks', type: :request do
     expect(refund_event.payload.dig('data', 'total_partner_refund')).to eq(500)
     expect(refund_event.payload.dig('data', 'refund_fees')).to eq([{ 'type' => 'partner', 'amount' => 100 }])
   end
+
+  it 'acknowledges a refund_request payload with no delivery_id instead of erroring' do
+    # RefundEvent requires delivery_id, same as WebhookEvent requires
+    # status — a payload that can't be persisted at all still has to be
+    # acked rather than surfaced as a 4xx/5xx, or Uber's webhook delivery
+    # system will just keep resending the identical, still-unpersistable
+    # payload.
+    refund_request_body = {
+      id: 'evt_refund_2', kind: 'event.refund_request', data: { id: 'refund_2' }
+    }.to_json
+    signature = OpenSSL::HMAC.hexdigest('SHA256', secret, refund_request_body)
+
+    post path, params: refund_request_body, headers: headers(signature: signature)
+
+    expect(response).to have_http_status(:ok)
+    expect(SpreeUberDirect::RefundEvent.count).to eq(0)
+  end
+
+  it 'does not persist a duplicate row for a retried refund_request delivery' do
+    refund_request_body = {
+      id: 'evt_refund_3', kind: 'event.refund_request', delivery_id: 'del_2',
+      data: { id: 'refund_3', currency_code: 'usd', total_partner_refund: 250, total_uber_refund: 0 }
+    }.to_json
+    signature = OpenSSL::HMAC.hexdigest('SHA256', secret, refund_request_body)
+
+    2.times { post path, params: refund_request_body, headers: headers(signature: signature) }
+
+    expect(response).to have_http_status(:ok)
+    expect(SpreeUberDirect::RefundEvent.where(delivery_id: 'del_2').count).to eq(1)
+  end
 end
