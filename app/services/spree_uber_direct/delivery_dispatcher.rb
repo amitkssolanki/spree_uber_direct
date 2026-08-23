@@ -26,7 +26,7 @@ module SpreeUberDirect
       return nil unless stock_location
 
       client = SpreeUberDirect::Client.for_store(order.store || Spree::Store.default)
-      response = client.create_delivery(build_payload(order, stock_location, quote_mapping))
+      response = client.create_delivery(build_payload(order, stock_location, quote_mapping, sandbox: client.sandbox?))
 
       persist_delivery!(order, response)
     rescue SpreeUberDirect::Client::MissingCredentialsError, SpreeUberDirect::RequestError => e
@@ -54,8 +54,8 @@ module SpreeUberDirect
         Spree::StockLocation.find_by(default: true)
     end
 
-    def build_payload(order, stock_location, quote_mapping)
-      {
+    def build_payload(order, stock_location, quote_mapping, sandbox:)
+      payload = {
         quote_id: quote_mapping.external_quote_id,
         pickup_name: stock_location.name,
         pickup_address: AddressPayload.format_address(stock_location),
@@ -66,6 +66,16 @@ module SpreeUberDirect
         manifest_items: manifest_items(order),
         manifest_total_value: (order.total * 100).to_i
       }
+      # Robo Courier: Uber Direct's sandbox-only test-automation feature —
+      # there is no dashboard "simulate delivery" UI the way DoorDash has
+      # one. Requesting `mode: 'auto'` here makes Uber's own courier bot
+      # walk the delivery through real status transitions (assigned →
+      # enroute → pickup imminent → picked up → dropoff imminent →
+      # delivered) at fixed 30s intervals, firing a real webhook at each
+      # stage. Never sent outside sandbox — a real courier fulfills a real
+      # delivery in production and must not be short-circuited.
+      payload[:test_specifications] = { robo_courier_specification: { mode: 'auto' } } if sandbox
+      payload
     end
 
     def manifest_items(order)
