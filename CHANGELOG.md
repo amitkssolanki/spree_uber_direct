@@ -2,7 +2,26 @@
 
 All notable changes to this project are documented here.
 
-## 0.1.0 (unreleased — in active local development)
+## 0.1.1
+
+Sandbox delivery dispatch now requests Uber's **Robo Courier** test-automation feature
+(`test_specifications.robo_courier_specification.mode: "auto"` on `POST /deliveries`) — Uber Direct has
+no dashboard "simulate delivery" UI the way DoorDash's own Delivery Simulator works; this is its actual
+equivalent. Without it, a sandbox delivery only ever emitted its initial `pending` webhook and then went
+silent forever (no real driver app was ever going to advance it), which is exactly what this closes.
+
+**Verified live**: dispatched a real order through the real `DeliveryDispatcher` (not a console script)
+against a real Uber Direct Sandbox account, tunneled through ngrok to a local dev server with a real
+registered webhook + signing secret — a real `pending` webhook landed, signature-verified, immediately on
+dispatch, closing out the one remaining gap between this extension's Sandbox setup and `spree_doordash`'s.
+
+Gated on **two independent conditions**, not just the credential's `uber_environment` field — code review
+caught that this project's own live production deploy runs against a genuinely `uber_environment: sandbox`
+credential (Uber has not yet granted production API access), so trusting that field alone would have
+silently faked delivery-status progression for real customer orders if this ever shipped to production.
+Robo Courier now also requires `!Rails.env.production?`.
+
+## 0.1.0 (released)
 
 A second, independent delivery provider alongside `spree_doordash` — same one-extension-per-integration
 pattern already established by `spree_square`/`spree_doordash`/`spree_menu_chat`/`spree_loyalty`, offered
