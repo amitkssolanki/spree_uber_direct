@@ -1,5 +1,5 @@
 module SpreeUberDirect
-  VERSION = '0.1.3'.freeze
+  VERSION = '0.1.4'.freeze
 
   def gem_version
     Gem::Version.new(VERSION)

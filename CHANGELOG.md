@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.4
+
+Reverses part of 0.1.1's own safety decision, deliberately: Robo Courier is now gated on the credential's
+`uber_environment: sandbox` flag alone again, not also on `!Rails.env.production?`. Explicit, informed call
+by the project owner after 0.1.1's own change shipped — this storefront is a demo running end to end on
+sandbox credentials (Square, DoorDash, Uber alike) regardless of Rails environment, and showing a real
+visitor the full Uber Direct delivery lifecycle live is the intended demo experience, not an accident to
+guard against. Flagged in code review as a real, accepted tradeoff rather than silently dropped: every
+production dispatch now also drives ~6 Robo Courier webhook calls against Uber's real Sandbox rate limit
+(200 req/10min per application_id) — fine at this project's traffic scale, worth revisiting if that changes.
+
 ## 0.1.3
 
 Closes the `event.refund_request` gap 0.1.2 flagged as a follow-up: those payloads were being acked and
