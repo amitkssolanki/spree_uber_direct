@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.3
+
+Closes the `event.refund_request` gap 0.1.2 flagged as a follow-up: those payloads were being acked and
+dropped alongside genuinely-disposable `event.courier_update` pings, but a refund notification carries real,
+unrecoverable data (`data.id`, `currency_code`, `total_partner_refund`, `total_uber_refund`, `refund_fees`,
+`refund_order_items` — confirmed against
+[Uber's own webhook docs](https://developer.uber.com/docs/deliveries/daas/api/webhook-event-refundrequest)).
+
+Adds `SpreeUberDirect::RefundEvent` — same idempotency-key shape as `WebhookEvent` (`delivery_id` + a digest
+of the raw body, deduping Uber's at-least-once webhook redelivery) but deliberately without any of
+`WebhookEvent`'s processing-state tracking (`processing_status`/`processed_at`/`error_message`), since
+there's no consumer for this data yet. `WebhooksController#create` now branches on
+`payload['kind'] == 'event.refund_request'` ahead of the generic blank-status drop and persists the full
+payload there instead. No processing/business logic added — purely a durable record for whenever refund
+reconciliation admin UI or accounting sync becomes a real need.
+
+**Code review caught a real bug before merge**: the first pass used a bare `RefundEvent.create!`, which
+raised `ActiveRecord::RecordInvalid` (reproduced directly) for any payload missing a top-level `delivery_id`
+— crashing instead of acking, and risking Uber retrying (and eventually disabling) the webhook subscription
+on a payload that would keep failing identically. Fixed by routing through the same
+find-or-create-with-digest + rescue shape `WebhookEvent`'s own path already uses.
+
 ## 0.1.2
 
 Fixes a real bug found live while verifying 0.1.1's Robo Courier run through a real ngrok-tunneled
