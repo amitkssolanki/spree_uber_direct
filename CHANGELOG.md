@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here.
 
+## 0.1.2
+
+Fixes a real bug found live while verifying 0.1.1's Robo Courier run through a real ngrok-tunneled
+dispatch: Uber's dashboard lets one webhook subscribe to three event kinds on the same endpoint —
+`event.delivery_status` (the only one with a top-level `status` field), `event.courier_update` (a courier
+GPS ping fired every 20s once a courier is assigned), and `event.refund_request` (fired when a refund is
+requested, confirmed against Uber's own webhook docs). Neither of the latter two carries a `status` field,
+but `WebhooksController` always built its `WebhookEvent` with `status: payload['status']`, and
+`WebhookEvent` requires status presence — every courier-location ping was hitting an unhandled
+`ActiveRecord::RecordNotFound` and surfacing as a bare `404` to Uber's webhook delivery system. The
+controller now acks and drops any payload with a blank status before it reaches `WebhookEvent`, with a
+debug-level log line so the drop stays traceable. `event.refund_request` payloads are currently discarded
+the same way — a real gap (refund data isn't persisted anywhere yet) flagged as a follow-up, not built
+here.
+
+**Verified live**: re-dispatched a real order through the real `DeliveryDispatcher` with Robo Courier
+enabled, watched it progress through the full real lifecycle (`pending` → `pickup` → `dropoff` →
+`delivered`, 8 real webhooks) through the ngrok tunnel with zero 404s afterward.
+
 ## 0.1.1
 
 Sandbox delivery dispatch now requests Uber's **Robo Courier** test-automation feature
