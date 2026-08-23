@@ -33,12 +33,23 @@ module SpreeUberDirect
       # courier GPS ping fired every 20s once a courier is assigned — no
       # `status` field, confirmed live), and `event.refund_request` (fired
       # when a refund is requested — no `status` field either, confirmed
-      # directly against Uber's own webhook payload docs). WebhookEvent's
-      # `status` column is specifically Uber's *delivery* status (see its
-      # own model comment) and requires presence, so acknowledge and drop
-      # anything that doesn't carry one rather than letting it fail
-      # validation and surface as a 404 to Uber's webhook delivery system
-      # — a courier-location ping and a refund notification both need no
+      # directly against Uber's own webhook payload docs). Unlike a
+      # courier ping, a refund notification carries real, unrecoverable
+      # data (data.id, currency_code, total_partner_refund,
+      # total_uber_refund, refund_fees, refund_order_items) — worth a
+      # durable record even with no consumer yet, so it's persisted to its
+      # own RefundEvent table before falling into the generic
+      # blank-status drop below.
+      if payload['kind'] == 'event.refund_request'
+        SpreeUberDirect::RefundEvent.create!(delivery_id: payload['delivery_id'], payload: payload)
+        return head :ok
+      end
+
+      # WebhookEvent's `status` column is specifically Uber's *delivery*
+      # status (see its own model comment) and requires presence, so
+      # acknowledge and drop anything else that doesn't carry one rather
+      # than letting it fail validation and surface as a 404 to Uber's
+      # webhook delivery system — a courier-location ping needs no
       # processing from this extension today.
       if payload['status'].blank?
         Rails.logger.debug { "[SpreeUberDirect] dropping webhook with no status (kind=#{payload['kind']}, id=#{payload['id']})" }
