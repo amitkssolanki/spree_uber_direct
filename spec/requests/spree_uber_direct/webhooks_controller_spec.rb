@@ -70,4 +70,43 @@ RSpec.describe 'SpreeUberDirect webhooks', type: :request do
 
     expect(response).to have_http_status(:bad_request)
   end
+
+  it 'acknowledges but drops a real courier_update payload (no status field) instead of erroring' do
+    # Real payload shape confirmed live: courier location pings carry
+    # `kind: "event.courier_update"` and a `data` object, but no top-level
+    # `status` at all — before this fix, WebhookEvent's presence
+    # validation on `status` turned this into an unhandled 404.
+    courier_update_body = {
+      id: 'evt_courier_ping', kind: 'event.courier_update',
+      data: { batch_id: 'bat_1', complete: false, courier: { name: 'Alex H.' } }
+    }.to_json
+    signature = OpenSSL::HMAC.hexdigest('SHA256', secret, courier_update_body)
+
+    expect(SpreeUberDirect::DeliveryWebhookJob).not_to receive(:perform_later)
+
+    post path, params: courier_update_body, headers: headers(signature: signature)
+
+    expect(response).to have_http_status(:ok)
+    expect(SpreeUberDirect::WebhookEvent.count).to eq(0)
+  end
+
+  it 'acknowledges but drops a real refund_request payload (no status field either) instead of erroring' do
+    # Payload shape confirmed against Uber's own webhook docs: a refund
+    # notification carries `kind: "event.refund_request"` and a `data`
+    # object full of refund-specific fields (refund_fees,
+    # refund_order_items, total_partner_refund, ...) — no `status` field
+    # anywhere, same gap as courier_update.
+    refund_request_body = {
+      id: 'evt_refund_1', kind: 'event.refund_request', delivery_id: 'del_1',
+      data: { id: 'refund_1', currency_code: 'usd', total_partner_refund: 500, total_uber_refund: 0 }
+    }.to_json
+    signature = OpenSSL::HMAC.hexdigest('SHA256', secret, refund_request_body)
+
+    expect(SpreeUberDirect::DeliveryWebhookJob).not_to receive(:perform_later)
+
+    post path, params: refund_request_body, headers: headers(signature: signature)
+
+    expect(response).to have_http_status(:ok)
+    expect(SpreeUberDirect::WebhookEvent.count).to eq(0)
+  end
 end
