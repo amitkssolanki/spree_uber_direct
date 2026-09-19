@@ -22,6 +22,9 @@ public/spree
 *.gem
 */*.gem
 
-# Real Uber Direct Sandbox credentials for manual verification — never committed,
-# unlike the test-only encryption keys in .env.
+# Real Uber Direct Sandbox credentials for manual verification, never committed.
 .env.sandbox
+
+# The dummy app's test-only Active Record Encryption keys (spec_helper loads them with
+# dotenv). Kept local like every other extension gem's; CI generates its own per run.
+.env
